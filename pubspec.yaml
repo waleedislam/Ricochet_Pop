@@ -1,0 +1,42 @@
+name: ricochet_pop
+description: A fast-paced bounce-and-pop arcade game built with Flutter.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  shared_preferences: ^2.2.2
+  audioplayers: ^6.1.0
+  google_mobile_ads: ^5.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.3
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
+  # Android 13+ adaptive icon: keeps the ball centered without the OS
+  # cropping it into a weird shape on different launcher masks.
+  adaptive_icon_background: "#0B1220"
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
+  web:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+    background_color: "#0B1220"
+    theme_color: "#0B1220"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sounds/
+    - assets/icon/
