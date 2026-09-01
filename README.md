@@ -1,62 +1,79 @@
-# Bubble Pop — Setup
+# Ricochet Pop 🎯
 
-Yeh version "Bouncing Balls" (Bubble Shooter) jaisa hai: neeche se ball shoot karo,
-side walls se bounce hoti hai, upar grid mein same-color 3+ bubbles match hone par pop ho jaate hain.
+A fast-paced bounce-and-pop arcade game built with **Flutter**. Aim, shoot, and match colored bubbles in this bubble-shooter-style game inspired by classics like *Bubble Shooter* and *Bouncing Balls*.
 
 ## Gameplay
 
-- **Grid** upar colored bubbles se bhara hota hai
-- **Drag karo** aim karne ke liye — dashed line dikhati hai ball kahan jayegi
-- **Chhodo (release)** to shoot — ball seedhi line mein jaati hai, left/right walls se bounce karti hai
-- Ball grid se takra kar snap ho jaati hai nearest khaali jagah par
-- **3 ya zyada same-color bubbles** connected hon toh woh pop ho jaate hain + score milta hai
-- Jo bubbles disconnect ho jayein (floating, ceiling se connect nahi) woh bhi gir kar pop ho jaate hain — bonus score
-- Har **6 shots** ke baad grid ek row neeche shift hoti hai aur naya row upar add hota hai — difficulty badhti jaati hai
-- Agar koi bubble shooter ke paas tak pahunch jaye → **Game Over**
-- High score `shared_preferences` se save hota hai
+- **Aim** by dragging on screen — a dashed trajectory line shows where the ball will travel.
+- **Release** to shoot — the ball travels in a straight line and bounces off the left/right walls.
+- The ball snaps into the nearest open slot when it hits the bubble grid.
+- **Match 3 or more** same-colored, connected bubbles to pop them and score points.
+- Bubbles left floating (disconnected from the ceiling) fall and pop automatically for bonus points.
+- Every **6 shots**, the grid shifts down one row and a new row is added — difficulty increases over time.
+- **Game Over** if any bubble reaches the shooter.
+- High scores are saved locally using `shared_preferences`.
 
-## Kaha rakhna hai (Folder placement)
+## Tech Stack
+
+- **Framework:** Flutter (Dart)
+- **State/Rendering:** Custom `CustomPainter` for grid and ball rendering
+- **Persistence:** `shared_preferences` — local high score storage
+- **Audio:** `audioplayers` — sound effects
+- **Monetization:** `google_mobile_ads`
+- **Platforms:** Android, iOS, Web, Windows, macOS, Linux
+
+## Project Structure
 
 ```
-bouncing_ball_game/
-├── pubspec.yaml                        → project root (replace)
-└── lib/
-    ├── main.dart                        → lib/main.dart (unchanged, replace if unsure)
-    ├── models/
-    │   └── ball.dart                    → lib/models/ball.dart (replace)
-    ├── game/
-    │   └── bubble_grid.dart             → lib/game/bubble_grid.dart (NEW)
-    ├── services/
-    │   └── high_score_service.dart      → lib/services/high_score_service.dart (unchanged, replace if unsure)
-    ├── widgets/
-    │   ├── bubble_shooter_painter.dart  → lib/widgets/bubble_shooter_painter.dart (NEW)
-    │   └── menu_overlay.dart            → lib/widgets/menu_overlay.dart (replace)
-    └── screens/
-        └── game_screen.dart             → lib/screens/game_screen.dart (replace — full rewrite)
+lib/
+├── main.dart                        # App entry point
+├── models/
+│   └── ball.dart                    # Ball data model
+├── game/
+│   └── bubble_grid.dart             # Grid logic, matching, and collision
+├── services/
+│   └── high_score_service.dart      # High score persistence
+├── widgets/
+│   ├── bubble_shooter_painter.dart  # Custom painter for game rendering
+│   └── menu_overlay.dart            # Menu / overlay UI
+└── screens/
+    └── game_screen.dart             # Main game screen
 ```
 
-**DELETE karo (ab use nahi ho rahe, purane obstacle-dodger version se):**
-- `lib/models/obstacle.dart`
-- `lib/models/coin.dart`
-- `lib/widgets/obstacles_painter.dart`
-- `lib/widgets/ball_painter.dart`
+## Getting Started
 
-## Run karne ke steps
+### Prerequisites
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) (>=3.0.0 <4.0.0)
+- A connected device, emulator, or Chrome for web
 
-1. Naye/replace files apni jagah copy karo, purani unused files delete karo
-2. `flutter pub get`
-3. `flutter run -d chrome`
+### Installation
 
-## Note
+```bash
+git clone https://github.com/zahra01-m/Ricochet_Pop.git
+cd Ricochet_Pop
+flutter pub get
+```
 
-Yeh endless mode hai (jaise ki asli "Bouncing Balls" app mein bhi endless/high-score mode hota hai) —
-"1000 numbered levels" wala feature alag content-design system maangta hai; agar wo bhi chahiye
-(fixed level layouts, level-select screen, moves-limit per level) toh bata dena, wo separately add kar sakti hun.
+### Run
 
-## Aage kya add kar sakti ho
+```bash
+flutter run -d chrome     # Web
+flutter run                # Connected device/emulator
+```
 
-- Fixed level layouts + level-select screen (asli app jaisa "1000 levels")
-- Power-up bubbles (bomb, rainbow/wildcard color)
-- Sound effects on pop/shoot
-- Smooth pop animation (scale-out) instead of instant removal
-- Particle burst on match
+## Roadmap
+
+- [ ] Fixed level layouts with a level-select screen
+- [ ] Power-up bubbles (bomb, rainbow/wildcard color)
+- [ ] Sound effects on pop/shoot
+- [ ] Smooth pop animation (scale-out) instead of instant removal
+- [ ] Particle burst effects on match
+
+## Author
+
+**Zahra Mushtaq**
+[GitHub](https://github.com/zahra01-m) · [LinkedIn](https://www.linkedin.com/in/zahra-mushtaq-)
+
+## License
+
+This project currently has no license specified. Add a `LICENSE` file if you intend to open-source it under a specific license (e.g., MIT).
