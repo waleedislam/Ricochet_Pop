@@ -8,13 +8,16 @@ import '../game/bubble_grid.dart';
 import '../game/trajectory.dart';
 import '../models/ball.dart';
 import '../models/falling_bubble.dart';
+import '../models/level_progress.dart';
 import '../models/particle.dart';
 import '../models/power_up.dart';
 import '../services/ad_service.dart';
 import '../services/audio_service.dart';
 import '../services/high_score_service.dart';
+import '../services/level_progress_service.dart';
 import '../widgets/bubble_shooter_painter.dart';
 import '../widgets/menu_overlay.dart';
+import '../widgets/rewarded_ad_prompt.dart';
 import 'level_select_screen.dart';
 
 /// Top-level screen state. [gameOver] doubles as the generic "show a
@@ -196,7 +199,18 @@ class _GameScreenState extends State<GameScreen>
         builder: (_) => LevelSelectScreen(unlockedLevel: _bestLevel),
       ),
     );
-    if (selected != null && mounted) {
+    if (selected == null || !mounted) return;
+
+    // Let the pop transition finish animating BEFORE doing the heavy
+    // synchronous work of rebuilding the whole bubble grid. Starting it
+    // immediately (in the same microtask the pop resolves in) makes it
+    // compete with the in-flight transition for the same frame budget,
+    // which is exactly what shows up as "the screen takes a while /
+    // freezes right when it opens." Waiting out the transition first
+    // means that stutter disappears — the grid rebuild then happens on
+    // an already-settled screen, where it's imperceptibly fast.
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (mounted) {
       _startAtLevel(selected);
     }
   }
@@ -624,15 +638,20 @@ class _GameScreenState extends State<GameScreen>
     _state = GameState.gameOver;
     HapticFeedback.mediumImpact();
     AudioService.instance.play(SfxSound.win);
-    AdService.instance.showInterstitial();
     final isNew = await HighScoreService.saveIfHighScore(_score);
     await HighScoreService.saveIfBestLevel(_level + 1);
+    final stars = LevelProgress.starsForClear(
+      shotsRemaining: _shotsRemaining,
+      totalShots: _shotsForLevel(_level),
+    );
+    await LevelProgressService.saveResult(_level, stars: stars, score: _score);
     if (!mounted) return;
     setState(() {
       _isNewHighScore = isNew;
       if (isNew) _highScore = _score;
       if (_level + 1 > _bestLevel) _bestLevel = _level + 1;
     });
+    _maybeOfferRewardedAd();
   }
 
   Future<void> _failLevel(String reason) async {
@@ -641,13 +660,34 @@ class _GameScreenState extends State<GameScreen>
     _state = GameState.gameOver;
     HapticFeedback.heavyImpact();
     AudioService.instance.play(SfxSound.lose);
-    AdService.instance.showInterstitial();
     final isNew = await HighScoreService.saveIfHighScore(_score);
     if (!mounted) return;
     setState(() {
       _isNewHighScore = isNew;
       if (isNew) _highScore = _score;
     });
+    _maybeOfferRewardedAd();
+  }
+
+  /// Offers a rewarded interstitial every few level-ends (win or lose),
+  /// per [AdService.shouldOfferLevelEndAd]'s throttling. Shows the
+  /// required pre-ad intro (reward + skip option) first, and only plays
+  /// the ad itself if the player actually opts in — never forced, and
+  /// never shown mid-transition (waits for the result overlay to settle
+  /// in first).
+  Future<void> _maybeOfferRewardedAd() async {
+    if (!AdService.instance.shouldOfferLevelEndAd()) return;
+    if (!AdService.instance.isRewardedInterstitialReady) return;
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    const rewardAmount = 50;
+    final watched = await showRewardedAdPrompt(context, rewardAmount: rewardAmount);
+    if (!mounted || !watched) return;
+    AdService.instance.showRewardedInterstitial(
+      onReward: (amount) {
+        if (mounted) setState(() => _score += amount);
+      },
+    );
   }
 
   double _clampAngle(double angle) {
@@ -850,12 +890,12 @@ class _GameScreenState extends State<GameScreen>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.white.withOpacity(0.07),
-                  Colors.white.withOpacity(0.02),
+                  Colors.white.withValues(alpha: 0.07),
+                  Colors.white.withValues(alpha: 0.02),
                 ],
               ),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.09)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -955,7 +995,7 @@ class _GameScreenState extends State<GameScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
@@ -1013,7 +1053,7 @@ class _GameScreenState extends State<GameScreen>
         border: Border.all(color: Colors.white70, width: 1.3),
         boxShadow: [
           BoxShadow(
-            color: info.accent.withOpacity(0.7),
+            color: info.accent.withValues(alpha: 0.7),
             blurRadius: 7,
             spreadRadius: 0.5,
           ),
@@ -1038,7 +1078,7 @@ class _GameScreenState extends State<GameScreen>
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white24, width: 1),
         boxShadow: [
-          BoxShadow(color: color.withOpacity(0.5), blurRadius: 6, spreadRadius: 0.5),
+          BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 6, spreadRadius: 0.5),
         ],
       ),
     );
@@ -1046,30 +1086,45 @@ class _GameScreenState extends State<GameScreen>
 }
 
 /// Animated mute/unmute control with a soft glass pill background.
-class _MuteButton extends StatelessWidget {
+class _MuteButton extends StatefulWidget {
   final bool muted;
   final VoidCallback onTap;
   const _MuteButton({required this.muted, required this.onTap});
 
   @override
+  State<_MuteButton> createState() => _MuteButtonState();
+}
+
+class _MuteButtonState extends State<_MuteButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withOpacity(0.06),
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, anim) =>
-                ScaleTransition(scale: anim, child: child),
-            child: Icon(
-              muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-              key: ValueKey(muted),
-              color: Colors.white70,
-              size: 20,
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.88 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Material(
+          color: const Color(0xFF64FFDA).withValues(alpha: 0.14),
+          shape: CircleBorder(
+            side: BorderSide(color: const Color(0xFF64FFDA).withValues(alpha: 0.35)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: Icon(
+                widget.muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                key: ValueKey(widget.muted),
+                color: const Color(0xFF64FFDA),
+                size: 20,
+              ),
             ),
           ),
         ),
@@ -1079,30 +1134,45 @@ class _MuteButton extends StatelessWidget {
 }
 
 /// Animated pause/play control with a soft glass pill background.
-class _PauseButton extends StatelessWidget {
+class _PauseButton extends StatefulWidget {
   final bool paused;
   final VoidCallback onTap;
   const _PauseButton({required this.paused, required this.onTap});
 
   @override
+  State<_PauseButton> createState() => _PauseButtonState();
+}
+
+class _PauseButtonState extends State<_PauseButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withOpacity(0.06),
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, anim) =>
-                ScaleTransition(scale: anim, child: child),
-            child: Icon(
-              paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-              key: ValueKey(paused),
-              color: Colors.white70,
-              size: 22,
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _pressed ? 0.88 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: Material(
+          color: const Color(0xFFFF8C42).withValues(alpha: 0.16),
+          shape: CircleBorder(
+            side: BorderSide(color: const Color(0xFFFF8C42).withValues(alpha: 0.4)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: Icon(
+                widget.paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                key: ValueKey(widget.paused),
+                color: const Color(0xFFFF8C42),
+                size: 22,
+              ),
             ),
           ),
         ),
@@ -1170,7 +1240,7 @@ class _ComboBadge extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.amber.withOpacity(0.45),
+                    color: Colors.amber.withValues(alpha: 0.45),
                     blurRadius: 8,
                   ),
                 ],

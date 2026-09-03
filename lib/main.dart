@@ -7,7 +7,7 @@ import 'services/ad_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AdService.initialize();
-  AdService.instance.preloadInterstitial();
+  AdService.instance.preloadRewardedInterstitial();
 
   // Edge-to-edge, dark status/nav bar icons to match the game's dark theme.
   SystemChrome.setSystemUIOverlayStyle(

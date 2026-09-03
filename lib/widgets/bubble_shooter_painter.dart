@@ -45,7 +45,22 @@ class BubbleShooterPainter extends CustomPainter {
     _drawFallingBubbles(canvas);
     _drawAimLaser(canvas);
     _drawSwapHint(canvas);
-    _drawBall(canvas, shooterBall, glow: true);
+
+    // A small, playful idle "bob" for the shooter ball while it's just
+    // waiting to be fired — purely a render-time offset, so it never
+    // affects the real shooterPosition used for aiming/hit-testing.
+    final idleBob = (aimAngle == null && canSwap)
+        ? math.sin(animT * 2.4) * 3.0
+        : 0.0;
+    if (idleBob != 0) {
+      canvas.save();
+      canvas.translate(0, idleBob);
+      _drawBall(canvas, shooterBall, glow: true);
+      canvas.restore();
+    } else {
+      _drawBall(canvas, shooterBall, glow: true);
+    }
+
     _drawParticles(canvas);
     _drawScorePopups(canvas);
   }
@@ -61,18 +76,49 @@ class BubbleShooterPainter extends CustomPainter {
     );
     canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
 
+    // A couple of very soft, slow-drifting color blobs behind the grid —
+    // low enough opacity to never affect bubble contrast, just adds a
+    // bit of colorful life to the play field instead of flat navy.
+    final blobDrift = math.sin(animT * 0.6) * 0.08;
+    canvas.drawCircle(
+      Offset(size.width * (0.22 + blobDrift), size.height * 0.18),
+      size.shortestSide * 0.32,
+      Paint()
+        ..color = const Color(0xFFFF7AC6).withValues(alpha: 0.05)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 50),
+    );
+    canvas.drawCircle(
+      Offset(size.width * (0.8 - blobDrift), size.height * 0.55),
+      size.shortestSide * 0.28,
+      Paint()
+        ..color = const Color(0xFF64FFDA).withValues(alpha: 0.05)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 50),
+    );
+
     // Twinkling starfield: fixed positions (seeded), animated brightness.
+    // A few sparkle in soft candy colors instead of plain white, for a
+    // touch of playfulness without being distracting.
     final rnd = math.Random(7);
+    const sparkleColors = [
+      Colors.white,
+      Color(0xFFFFC857),
+      Color(0xFF64FFDA),
+      Color(0xFFFF7AC6),
+    ];
     for (int i = 0; i < 60; i++) {
       final dx = rnd.nextDouble() * size.width;
       final dy = rnd.nextDouble() * size.height;
       final r = rnd.nextDouble() * 1.5 + 0.4;
       final phase = rnd.nextDouble() * 2 * math.pi;
+      final colorPick = rnd.nextDouble();
       final twinkle = (math.sin(dangerPulse * 2 * math.pi + phase) + 1) / 2;
+      final color = colorPick < 0.15
+          ? sparkleColors[1 + rnd.nextInt(sparkleColors.length - 1)]
+          : sparkleColors[0];
       canvas.drawCircle(
         Offset(dx, dy),
         r,
-        Paint()..color = Colors.white.withOpacity(0.03 + twinkle * 0.09),
+        Paint()..color = color.withValues(alpha: 0.03 + twinkle * 0.09),
       );
     }
   }
@@ -90,8 +136,8 @@ class BubbleShooterPainter extends CustomPainter {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.red.withOpacity(0.10 + dangerPulse * 0.06),
-            Colors.red.withOpacity(0.0),
+            Colors.red.withValues(alpha: 0.10 + dangerPulse * 0.06),
+            Colors.red.withValues(alpha: 0.0),
           ],
         ).createShader(zoneRect),
     );
@@ -101,7 +147,7 @@ class BubbleShooterPainter extends CustomPainter {
       Offset(0, y),
       Offset(size.width, y),
       Paint()
-        ..color = Colors.redAccent.withOpacity(0.35 + dangerPulse * 0.25)
+        ..color = Colors.redAccent.withValues(alpha: 0.35 + dangerPulse * 0.25)
         ..strokeWidth = 8
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
     );
@@ -140,7 +186,7 @@ class BubbleShooterPainter extends CustomPainter {
       if (opacity < 1.0) {
         canvas.saveLayer(
           Rect.fromCircle(center: Offset.zero, radius: b.radius * 2.2),
-          Paint()..color = Colors.white.withOpacity(opacity),
+          Paint()..color = Colors.white.withValues(alpha: opacity),
         );
       }
       _drawBubble(canvas, Offset.zero, b.radius, b.color);
@@ -157,7 +203,7 @@ class BubbleShooterPainter extends CustomPainter {
       center.translate(0, radius * 0.12),
       radius * 0.96,
       Paint()
-        ..color = Colors.black.withOpacity(0.25)
+        ..color = Colors.black.withValues(alpha: 0.25)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
 
@@ -183,7 +229,7 @@ class BubbleShooterPainter extends CustomPainter {
     canvas.drawCircle(
       center.translate(-radius * 0.32, -radius * 0.32),
       radius * 0.26,
-      Paint()..color = Colors.white.withOpacity(0.55),
+      Paint()..color = Colors.white.withValues(alpha: 0.55),
     );
 
     // Thin rim for definition.
@@ -193,7 +239,7 @@ class BubbleShooterPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
-        ..color = Colors.black.withOpacity(0.15),
+        ..color = Colors.black.withValues(alpha: 0.15),
     );
   }
 
@@ -210,14 +256,14 @@ class BubbleShooterPainter extends CustomPainter {
         ball.position,
         ball.radius * (1.9 + breathe * 0.25 + extra),
         Paint()
-          ..color = glowColor.withOpacity(0.14 + breathe * 0.06 + extra * 0.25)
+          ..color = glowColor.withValues(alpha: 0.14 + breathe * 0.06 + extra * 0.25)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
       );
       canvas.drawCircle(
         ball.position,
         ball.radius * (1.5 + extra * 0.5),
         Paint()
-          ..color = glowColor.withOpacity(0.32)
+          ..color = glowColor.withValues(alpha: 0.32)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
       );
     }
@@ -244,7 +290,7 @@ class BubbleShooterPainter extends CustomPainter {
       center.translate(0, radius * 0.12),
       radius * 0.96,
       Paint()
-        ..color = Colors.black.withOpacity(0.3)
+        ..color = Colors.black.withValues(alpha: 0.3)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
 
@@ -276,7 +322,7 @@ class BubbleShooterPainter extends CustomPainter {
     canvas.drawCircle(
       center.translate(-radius * 0.32, -radius * 0.32),
       radius * 0.26,
-      Paint()..color = Colors.white.withOpacity(0.55),
+      Paint()..color = Colors.white.withValues(alpha: 0.55),
     );
 
     // Bright rim so it separates cleanly from the board behind it.
@@ -286,12 +332,12 @@ class BubbleShooterPainter extends CustomPainter {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.6
-        ..color = Colors.white.withOpacity(0.6),
+        ..color = Colors.white.withValues(alpha: 0.6),
     );
 
     // Slowly rotating dashed energy ring — the "this one is special" tell.
     final ringPaint = Paint()
-      ..color = Colors.white.withOpacity(0.6)
+      ..color = Colors.white.withValues(alpha: 0.6)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.8;
     const dashCount = 14;
@@ -345,7 +391,7 @@ class BubbleShooterPainter extends CustomPainter {
     if (!canSwap || aimPath != null) return; // hide while actively aiming
     final r = shooterBall.radius * 1.45;
     final dashPaint = Paint()
-      ..color = Colors.white.withOpacity(0.35)
+      ..color = Colors.white.withValues(alpha: 0.35)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
     const dashCount = 18;
@@ -369,7 +415,7 @@ class BubbleShooterPainter extends CustomPainter {
 
     // Outer soft glow.
     final glowPaint = Paint()
-      ..color = laserColor.withOpacity(0.35)
+      ..color = laserColor.withValues(alpha: 0.35)
       ..strokeWidth = 7
       ..strokeCap = StrokeCap.round
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
@@ -387,12 +433,12 @@ class BubbleShooterPainter extends CustomPainter {
     }
 
     // Impact marker at the end of the path.
-    canvas.drawCircle(path.last, 5, Paint()..color = laserColor.withOpacity(0.9));
+    canvas.drawCircle(path.last, 5, Paint()..color = laserColor.withValues(alpha: 0.9));
     canvas.drawCircle(
       path.last,
       9,
       Paint()
-        ..color = laserColor.withOpacity(0.35)
+        ..color = laserColor.withValues(alpha: 0.35)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
@@ -413,36 +459,93 @@ class BubbleShooterPainter extends CustomPainter {
   }
 
   void _drawParticles(Canvas canvas) {
+    int i = 0;
     for (final p in particles) {
-      final opacity = (1 - p.progress).clamp(0.0, 1.0);
-      canvas.drawCircle(
-        p.position,
-        p.size * (1 - p.progress * 0.4),
-        Paint()..color = p.color.withOpacity(opacity),
-      );
+      final t = p.progress;
+      // Quick "pop" on spawn (slightly oversized, settles fast), then a
+      // normal shrink toward the end of its life.
+      final popIn = t < 0.15 ? 1.15 - (0.15 - t) * 1.0 : 1.0;
+      final shrink = t > 0.6 ? 1.0 - ((t - 0.6) / 0.4) : 1.0;
+      final scale = (popIn * shrink).clamp(0.0, 1.3);
+      final opacity = (1 - t).clamp(0.0, 1.0);
+      final rotation = math.atan2(p.velocity.dy, p.velocity.dx) + t * 6;
+      final size = p.size * scale;
+
+      canvas.save();
+      canvas.translate(p.position.dx, p.position.dy);
+      canvas.rotate(rotation);
+      final paint = Paint()..color = p.color.withValues(alpha: opacity);
+      switch (i % 3) {
+        case 0:
+          canvas.drawCircle(Offset.zero, size, paint);
+          break;
+        case 1:
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+              Rect.fromCenter(center: Offset.zero, width: size * 1.7, height: size),
+              Radius.circular(size * 0.3),
+            ),
+            paint,
+          );
+          break;
+        default:
+          _drawSparkStar(canvas, paint, size);
+      }
+      canvas.restore();
+      i++;
     }
+  }
+
+  void _drawSparkStar(Canvas canvas, Paint paint, double radius) {
+    const points = 4;
+    final path = Path();
+    for (int i = 0; i < points * 2; i++) {
+      final r = i.isEven ? radius : radius * 0.4;
+      final a = (i * math.pi) / points;
+      final pt = Offset(math.cos(a) * r, math.sin(a) * r);
+      if (i == 0) {
+        path.moveTo(pt.dx, pt.dy);
+      } else {
+        path.lineTo(pt.dx, pt.dy);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
   }
 
   void _drawScorePopups(Canvas canvas) {
     for (final s in scorePopups) {
-      final opacity = (1 - s.progress).clamp(0.0, 1.0);
-      final dy = -34 * s.progress;
+      final t = s.progress;
+      final opacity = (1 - t).clamp(0.0, 1.0);
+      final dy = -34 * t;
+      // Bouncy pop-in over the first third of its life, then settle.
+      final popScale = Curves.elasticOut.transform((t * 2.6).clamp(0.0, 1.0));
+      final wiggle = math.sin(t * 6) * (1 - t) * 0.12;
+      final big = s.amount >= 50;
+
       final textPainter = TextPainter(
         text: TextSpan(
-          text: '+${s.amount}',
+          text: big ? '★ +${s.amount}' : '+${s.amount}',
           style: TextStyle(
-            color: Colors.amberAccent.withOpacity(opacity),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+            color: (big ? const Color(0xFFFFC857) : Colors.amberAccent)
+                .withValues(alpha: opacity),
+            fontSize: big ? 22 : 18,
+            fontWeight: FontWeight.w900,
             shadows: const [Shadow(color: Colors.black54, blurRadius: 3)],
           ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
+
+      canvas.save();
+      canvas.translate(s.position.dx, s.position.dy + dy);
+      canvas.rotate(wiggle);
+      canvas.scale(popScale);
       textPainter.paint(
         canvas,
-        s.position.translate(-textPainter.width / 2, dy - textPainter.height / 2),
+        Offset(-textPainter.width / 2, -textPainter.height / 2),
       );
+      canvas.restore();
     }
   }
 

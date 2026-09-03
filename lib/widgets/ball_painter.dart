@@ -11,8 +11,8 @@ class BallPainter extends CustomPainter {
     final paint = Paint()
       ..shader = RadialGradient(
         colors: [
-          ball.color.withOpacity(1.0),
-          ball.color.withOpacity(0.7),
+          ball.color.withValues(alpha: 1.0),
+          ball.color.withValues(alpha: 0.7),
         ],
       ).createShader(
         Rect.fromCircle(center: ball.position, radius: ball.radius),
@@ -21,7 +21,7 @@ class BallPainter extends CustomPainter {
     canvas.drawCircle(ball.position, ball.radius, paint);
 
     // Small highlight for a glossy look.
-    final highlightPaint = Paint()..color = Colors.white.withOpacity(0.5);
+    final highlightPaint = Paint()..color = Colors.white.withValues(alpha: 0.5);
     canvas.drawCircle(
       ball.position.translate(-ball.radius * 0.3, -ball.radius * 0.3),
       ball.radius * 0.25,

@@ -40,7 +40,18 @@ class _MenuOverlayState extends State<MenuOverlay>
     with TickerProviderStateMixin {
   late final AnimationController _entrance;
   late final AnimationController _ambient;
+  late final AnimationController _confetti;
   final List<_BubbleSpec> _bubbles = _generateBubbleField();
+  late final List<_ConfettiPiece> _confettiPieces;
+  late final String _encouragement;
+
+  static const _encouragements = [
+    "So close! You've got this 💪",
+    "Almost there — try again!",
+    "Great effort! One more shot?",
+    "Don't give up, champ!",
+    "So close to clearing it!",
+  ];
 
   @override
   void initState() {
@@ -53,12 +64,30 @@ class _MenuOverlayState extends State<MenuOverlay>
       vsync: this,
       duration: const Duration(seconds: 6),
     )..repeat();
+    _confetti = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    // A little celebratory burst — on the welcoming start screen, and
+    // (bigger reason to celebrate) whenever a level is completed. Plays
+    // once per time the overlay appears, never loops, so it stays fun
+    // instead of annoying.
+    final isWin = widget.mode == OverlayMode.levelComplete;
+    _confettiPieces = _generateConfetti(big: isWin);
+    if (widget.mode == OverlayMode.start || isWin) {
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted) _confetti.forward();
+      });
+    }
+    _encouragement =
+        _encouragements[math.Random().nextInt(_encouragements.length)];
   }
 
   @override
   void dispose() {
     _entrance.dispose();
     _ambient.dispose();
+    _confetti.dispose();
     super.dispose();
   }
 
@@ -91,9 +120,9 @@ class _MenuOverlayState extends State<MenuOverlay>
                   center: Alignment.topCenter,
                   radius: 1.4,
                   colors: [
-                    _accent.withOpacity(0.16),
-                    const Color(0xFF0B1220).withOpacity(0.72),
-                    Colors.black.withOpacity(0.82),
+                    _accent.withValues(alpha: 0.16),
+                    const Color(0xFF0B1220).withValues(alpha: 0.72),
+                    Colors.black.withValues(alpha: 0.82),
                   ],
                   stops: const [0.0, 0.55, 1.0],
                 ),
@@ -117,6 +146,16 @@ class _MenuOverlayState extends State<MenuOverlay>
             size: Size.infinite,
           ),
         ),
+        // One-time celebratory confetti burst — welcome on start, victory
+        // celebration on level complete.
+        if (widget.mode == OverlayMode.start || widget.mode == OverlayMode.levelComplete)
+          AnimatedBuilder(
+            animation: _confetti,
+            builder: (context, _) => CustomPaint(
+              painter: _ConfettiPainter(t: _confetti.value, pieces: _confettiPieces),
+              size: Size.infinite,
+            ),
+          ),
         Center(
           child: AnimatedBuilder(
             animation: _entrance,
@@ -153,52 +192,69 @@ class _MenuOverlayState extends State<MenuOverlay>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _PulsingIcon(icon: _icon, color: _accent),
+        _PulsingIcon(
+          icon: _icon,
+          color: _accent,
+          imageAsset:
+              widget.mode == OverlayMode.start ? 'assets/icon/app_icon.png' : null,
+        ),
         const SizedBox(height: 16),
-        ShaderMask(
-          shaderCallback: (bounds) => LinearGradient(
-            colors: [Colors.white, _accent.withOpacity(0.85)],
-          ).createShader(bounds),
-          child: Text(
-            _title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.6,
-              height: 1.15,
+        AnimatedBuilder(
+          animation: _ambient,
+          builder: (context, child) {
+            final wiggle = widget.mode == OverlayMode.start
+                ? math.sin(_ambient.value * 2 * math.pi * 1.5) * 0.035
+                : 0.0;
+            return Transform.rotate(angle: wiggle, child: child);
+          },
+          child: ShaderMask(
+            shaderCallback: (bounds) => LinearGradient(
+              colors: [Colors.white, _accent.withValues(alpha: 0.85)],
+            ).createShader(bounds),
+            child: Text(
+              _title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 30,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.6,
+                height: 1.15,
+              ),
             ),
           ),
         ),
         const SizedBox(height: 16),
         ..._buildStaggeredBody(),
         const SizedBox(height: 26),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _BouncyButton(
-              onPressed: widget.onPlay,
-              color: _accent,
-              label: _buttonLabel,
-              icon: _buttonIcon,
-            ),
-            if (widget.onQuit != null &&
-                (widget.mode == OverlayMode.paused ||
-                    widget.mode == OverlayMode.levelFailed)) ...[
-              const SizedBox(width: 12),
-              _GhostButton(onPressed: widget.onQuit!, label: 'Menu'),
-            ],
-            if (widget.onSelectLevel != null &&
-                widget.mode == OverlayMode.start) ...[
-              const SizedBox(width: 12),
-              _GhostButton(
-                onPressed: widget.onSelectLevel!,
-                label: 'Levels',
-                icon: Icons.map_rounded,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _BouncyButton(
+                onPressed: widget.onPlay,
+                color: _accent,
+                label: _buttonLabel,
+                icon: _buttonIcon,
               ),
+              if (widget.onQuit != null &&
+                  (widget.mode == OverlayMode.paused ||
+                      widget.mode == OverlayMode.levelFailed)) ...[
+                const SizedBox(width: 12),
+                _GhostButton(onPressed: widget.onQuit!, label: 'Menu'),
+              ],
+              if (widget.onSelectLevel != null &&
+                  widget.mode == OverlayMode.start) ...[
+                const SizedBox(width: 12),
+                _GhostButton(
+                  onPressed: widget.onSelectLevel!,
+                  label: 'Levels',
+                  icon: Icons.map_rounded,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ],
     );
@@ -292,6 +348,16 @@ class _MenuOverlayState extends State<MenuOverlay>
         return [
           Column(
             children: [
+              Text(
+                _encouragement,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF7CE38B),
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
               _ScoreChip(score: widget.score, accent: _accent),
               const SizedBox(height: 8),
               Row(
@@ -338,17 +404,21 @@ class _MenuOverlayState extends State<MenuOverlay>
     }
   }
 
-  Widget _instructionRow(IconData icon, String text) {
+  Widget _instructionRow(IconData icon, String text, [Color? color]) {
+    final c = color ?? Colors.white70;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          padding: const EdgeInsets.all(5),
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.06),
-            borderRadius: BorderRadius.circular(8),
+            gradient: RadialGradient(
+              colors: [c.withValues(alpha: 0.35), c.withValues(alpha: 0.12)],
+            ),
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: c.withValues(alpha: 0.4)),
           ),
-          child: Icon(icon, size: 14, color: Colors.white70),
+          child: Icon(icon, size: 15, color: c),
         ),
         const SizedBox(width: 9),
         Flexible(
@@ -368,7 +438,7 @@ class _MenuOverlayState extends State<MenuOverlay>
       context: context,
       barrierLabel: 'How to play',
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.6),
+      barrierColor: Colors.black.withValues(alpha: 0.6),
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (context, anim, secAnim) => const SizedBox.shrink(),
       transitionBuilder: (context, anim, secAnim, child) {
@@ -392,21 +462,85 @@ class _MenuOverlayState extends State<MenuOverlay>
 
 /// Full-screen "How To Play" reference: the rules + special-ball legend,
 /// reached via the info icon on the start screen instead of living inline.
-class _HowToPlayCard extends StatelessWidget {
+class _HowToPlayCard extends StatefulWidget {
   final Color accent;
-  final Widget Function(IconData icon, String text) instructionRow;
+  final Widget Function(IconData icon, String text, [Color? color]) instructionRow;
 
   const _HowToPlayCard({required this.accent, required this.instructionRow});
 
   @override
+  State<_HowToPlayCard> createState() => _HowToPlayCardState();
+}
+
+class _HowToPlayCardState extends State<_HowToPlayCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _stagger;
+
+  static const _rowColors = [
+    Color(0xFF64FFDA),
+    Color(0xFFFFC857),
+    Color(0xFFFF7AC6),
+    Color(0xFFFF6B4A),
+    Color(0xFF7CE38B),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _stagger = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _stagger.dispose();
+    super.dispose();
+  }
+
+  /// Wraps [child] so it fades/slides/pops in on its own little delay,
+  /// [index] steps into the stagger — later rows appear a beat after
+  /// earlier ones instead of everything snapping in at once.
+  Widget _staggered(int index, Widget child) {
+    final start = 0.08 * index;
+    final anim = CurvedAnimation(
+      parent: _stagger,
+      curve: Interval(start.clamp(0.0, 0.9), (start + 0.4).clamp(0.0, 1.0),
+          curve: Curves.easeOutBack),
+    );
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        final v = anim.value.clamp(0.0, 1.3);
+        return Opacity(
+          opacity: v.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset((1 - v) * 20, 0),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final rows = [
+      widget.instructionRow(Icons.touch_app_rounded, 'Drag to aim the laser sight', _rowColors[0]),
+      widget.instructionRow(Icons.blur_circular_rounded, 'Match 3+ same colors to pop them', _rowColors[1]),
+      widget.instructionRow(Icons.swap_horiz_rounded, 'Tap your ball to swap its color, unlimited', _rowColors[2]),
+      widget.instructionRow(Icons.warning_amber_rounded, "Don't let bubbles reach the red line", _rowColors[3]),
+      widget.instructionRow(Icons.flag_rounded, 'Clear the board before shots run out', _rowColors[4]),
+    ];
+
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.86,
       ),
       child: _Card(
         mode: OverlayMode.start,
-        accent: accent,
+        accent: widget.accent,
         cornerAction: _CloseButton(onTap: () => Navigator.of(context).pop()),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -423,17 +557,12 @@ class _HowToPlayCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            instructionRow(Icons.touch_app_rounded, 'Drag to aim the laser sight'),
-            const SizedBox(height: 12),
-            instructionRow(Icons.blur_circular_rounded, 'Match 3+ same colors to pop them'),
-            const SizedBox(height: 12),
-            instructionRow(Icons.swap_horiz_rounded, 'Tap your ball to swap its color, unlimited'),
-            const SizedBox(height: 12),
-            instructionRow(Icons.warning_amber_rounded, "Don't let bubbles reach the red line"),
-            const SizedBox(height: 12),
-            instructionRow(Icons.flag_rounded, 'Clear the board before shots run out'),
+            for (int i = 0; i < rows.length; i++) ...[
+              _staggered(i, rows[i]),
+              if (i != rows.length - 1) const SizedBox(height: 12),
+            ],
             const SizedBox(height: 18),
-            const _PowerUpLegend(),
+            _staggered(rows.length, const _PowerUpLegend()),
           ],
         ),
       ),
@@ -458,8 +587,8 @@ class _InfoButton extends StatelessWidget {
           height: 34,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.08),
-            border: Border.all(color: Colors.white.withOpacity(0.18)),
+            color: Colors.white.withValues(alpha: 0.08),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
           ),
           child: const Icon(
             Icons.info_outline_rounded,
@@ -489,8 +618,8 @@ class _CloseButton extends StatelessWidget {
           height: 34,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.08),
-            border: Border.all(color: Colors.white.withOpacity(0.18)),
+            color: Colors.white.withValues(alpha: 0.08),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
           ),
           child: const Icon(
             Icons.close_rounded,
@@ -519,9 +648,14 @@ class _PowerUpLegend extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFFFC857).withValues(alpha: 0.06),
+            const Color(0xFFFF7AC6).withValues(alpha: 0.06),
+          ],
+        ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
       ),
       child: Column(
         children: [
@@ -653,12 +787,12 @@ class _Card extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: accent.withOpacity(0.25),
+            color: accent.withValues(alpha: 0.25),
             blurRadius: 40,
             spreadRadius: -6,
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withValues(alpha: 0.5),
             blurRadius: 24,
             offset: const Offset(0, 14),
           ),
@@ -675,11 +809,11 @@ class _Card extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF223449).withOpacity(0.92),
-                  const Color(0xFF0F1721).withOpacity(0.96),
+                  const Color(0xFF223449).withValues(alpha: 0.92),
+                  const Color(0xFF0F1721).withValues(alpha: 0.96),
                 ],
               ),
-              border: Border.all(color: accent.withOpacity(0.25), width: 1.4),
+              border: Border.all(color: accent.withValues(alpha: 0.25), width: 1.4),
               borderRadius: BorderRadius.circular(26),
             ),
             child: Stack(
@@ -700,11 +834,15 @@ class _Card extends StatelessWidget {
   }
 }
 
-/// Icon with a soft breathing glow behind it.
+/// A little character animation: the icon actually bounces like a ball,
+/// complete with squash-on-landing and a ground shadow that reacts —
+/// fitting for a game about bouncing, and a lot more fun to watch than a
+/// static glow.
 class _PulsingIcon extends StatefulWidget {
   final IconData icon;
   final Color color;
-  const _PulsingIcon({required this.icon, required this.color});
+  final String? imageAsset;
+  const _PulsingIcon({required this.icon, required this.color, this.imageAsset});
 
   @override
   State<_PulsingIcon> createState() => _PulsingIconState();
@@ -717,8 +855,8 @@ class _PulsingIconState extends State<_PulsingIcon>
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(seconds: 2))
-      ..repeat(reverse: true);
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 850))
+      ..repeat();
   }
 
   @override
@@ -732,23 +870,89 @@ class _PulsingIconState extends State<_PulsingIcon>
     return AnimatedBuilder(
       animation: _c,
       builder: (context, _) {
-        final t = Curves.easeInOut.transform(_c.value);
-        return Container(
-          width: 74,
-          height: 74,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [
-                widget.color.withOpacity(0.35 + t * 0.15),
-                widget.color.withOpacity(0.0),
-              ],
-            ),
-          ),
-          child: Transform.scale(
-            scale: 1.0 + t * 0.06,
-            child: Icon(widget.icon, size: 46, color: widget.color),
+        // Parabolic hop: 0 at ground (t=0 and t=1), 1 at the apex (t=0.5).
+        // Repeating this exact shape with a plain (non-reversing) loop is
+        // seamless — it already returns to the ground smoothly each cycle.
+        final t = _c.value;
+        final height = 4 * t * (1 - t); // 0..1..0
+        const maxBounce = 16.0;
+        final squash = 1 - height; // 1 at ground (squashed), 0 at apex
+
+        const ballSize = 64.0;
+        final scaleX = 1.0 + squash * 0.16;
+        final scaleY = 1.0 - squash * 0.16;
+
+        return SizedBox(
+          width: 90,
+          height: 90 + maxBounce,
+          child: Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              // Ground shadow: wider/darker when the ball is down, smaller
+              // and softer when it's up at the apex — sells the bounce.
+              Positioned(
+                bottom: 6,
+                child: Opacity(
+                  opacity: 0.35 - height * 0.2,
+                  child: Container(
+                    width: 46 - height * 14,
+                    height: 10 - height * 4,
+                    decoration: const BoxDecoration(
+                      color: Colors.black,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+              // The bouncing ball itself.
+              Positioned(
+                bottom: 10 + height * maxBounce,
+                child: Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.identity()
+                    ..scaleByDouble(scaleX, scaleY, 1.0, 1.0),
+                  child: Container(
+                    width: ballSize,
+                    height: ballSize,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          widget.color.withValues(alpha: 0.4),
+                          widget.color.withValues(alpha: 0.0),
+                        ],
+                      ),
+                    ),
+                    child: widget.imageAsset != null
+                        ? Container(
+                            width: 62,
+                            height: 62,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: widget.color.withValues(alpha: 0.6),
+                                width: 1.6,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: widget.color.withValues(alpha: 0.4),
+                                  blurRadius: 14,
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: Image.asset(
+                                widget.imageAsset!,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          )
+                        : Icon(widget.icon, size: 46, color: widget.color),
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -770,14 +974,14 @@ class _ScoreChip extends StatelessWidget {
       builder: (context, value, child) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         decoration: BoxDecoration(
-          color: accent.withOpacity(0.12),
+          color: accent.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: accent.withOpacity(0.3)),
+          border: Border.all(color: accent.withValues(alpha: 0.3)),
         ),
         child: Text(
           'Score: $value',
           style: TextStyle(
-            color: Colors.white.withOpacity(0.92),
+            color: Colors.white.withValues(alpha: 0.92),
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),
@@ -787,35 +991,62 @@ class _ScoreChip extends StatelessWidget {
   }
 }
 
-class _StatPill extends StatelessWidget {
+class _StatPill extends StatefulWidget {
   final IconData icon;
   final String label;
   final Color color;
   const _StatPill({required this.icon, required this.label, required this.color});
 
   @override
+  State<_StatPill> createState() => _StatPillState();
+}
+
+class _StatPillState extends State<_StatPill> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))
+      ..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.35)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, child) {
+        final t = Curves.easeInOut.transform(_c.value);
+        return Transform.scale(scale: 1.0 + t * 0.04, child: child);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: widget.color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: widget.color.withValues(alpha: 0.35)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(widget.icon, size: 15, color: widget.color),
+            const SizedBox(width: 6),
+            Text(
+              widget.label,
+              style: TextStyle(
+                color: widget.color,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -859,7 +1090,7 @@ class _HighScoreBadgeState extends State<_HighScoreBadge>
               fontSize: 16,
               fontWeight: FontWeight.bold,
               shadows: [
-                Shadow(color: Colors.amber.withOpacity(0.6 * t), blurRadius: 12),
+                Shadow(color: Colors.amber.withValues(alpha: 0.6 * t), blurRadius: 12),
               ],
             ),
           ),
@@ -912,7 +1143,7 @@ class _BouncyButtonState extends State<_BouncyButton> {
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: widget.color.withOpacity(_pressed ? 0.15 : 0.4),
+                color: widget.color.withValues(alpha: _pressed ? 0.15 : 0.4),
                 blurRadius: _pressed ? 6 : 16,
                 offset: Offset(0, _pressed ? 2 : 8),
               ),
@@ -966,9 +1197,9 @@ class _GhostButtonState extends State<_GhostButton> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(_pressed ? 0.05 : 0.02),
+            color: Colors.white.withValues(alpha: _pressed ? 0.05 : 0.02),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: Colors.white.withOpacity(0.3)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1019,21 +1250,21 @@ class _AmbientBlobPainter extends CustomPainter {
       c1,
       size.shortestSide * 0.35,
       Paint()
-        ..color = accent.withOpacity(0.10)
+        ..color = accent.withValues(alpha: 0.10)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 60),
     );
     canvas.drawCircle(
       c2,
       size.shortestSide * 0.3,
       Paint()
-        ..color = const Color(0xFF64FFDA).withOpacity(0.07)
+        ..color = const Color(0xFF64FFDA).withValues(alpha: 0.07)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 60),
     );
     canvas.drawCircle(
       c3,
       size.shortestSide * 0.24,
       Paint()
-        ..color = const Color(0xFFFFC857).withOpacity(0.05)
+        ..color = const Color(0xFFFFC857).withValues(alpha: 0.05)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 55),
     );
   }
@@ -1071,21 +1302,24 @@ List<_BubbleSpec> _generateBubbleField() {
     Color(0xFFFDD835),
     Color(0xFF8E24AA),
     Color(0xFF64FFDA),
+    Color(0xFFFF7AC6),
+    Color(0xFFFF8C42),
   ];
-  return List.generate(16, (i) {
+  return List.generate(22, (i) {
     return _BubbleSpec(
       dx: random.nextDouble(),
-      size: 6 + random.nextDouble() * 16,
-      speed: 0.35 + random.nextDouble() * 0.85,
+      size: 8 + random.nextDouble() * 22,
+      speed: 0.3 + random.nextDouble() * 0.9,
       phase: random.nextDouble(),
-      opacity: 0.08 + random.nextDouble() * 0.14,
+      opacity: 0.16 + random.nextDouble() * 0.22,
       color: palette[random.nextInt(palette.length)],
     );
   });
 }
 
-/// Paints softly-glowing bubbles drifting upward and looping seamlessly,
-/// echoing the game's own bubbles for a bit of atmosphere behind the card.
+/// Paints cheerful, clearly-colored bubbles drifting upward and looping
+/// seamlessly — bright enough to feel fun and alive rather than just
+/// background ambiance, echoing the game's own bubbles.
 class _FloatingBubblesPainter extends CustomPainter {
   final double t; // 0..1 looping
   final List<_BubbleSpec> bubbles;
@@ -1096,23 +1330,40 @@ class _FloatingBubblesPainter extends CustomPainter {
     for (final b in bubbles) {
       final progress = (t * b.speed + b.phase) % 1.0;
       final dy = size.height * (1 - progress) + size.height * 0.1;
-      final sway = math.sin(progress * 2 * math.pi + b.phase * 10) * 10;
+      final sway = math.sin(progress * 2 * math.pi + b.phase * 10) * 12;
       final center = Offset(b.dx * size.width + sway, dy);
       // Fade in/out near the top and bottom of the loop so bubbles don't
       // visibly pop in or out mid-screen.
       final edgeFade = (math.sin(progress * math.pi)).clamp(0.0, 1.0);
 
+      // Soft outer glow.
+      canvas.drawCircle(
+        center,
+        b.size * 1.15,
+        Paint()
+          ..color = b.color.withValues(alpha: b.opacity * 0.5 * edgeFade)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+      // Filled bubble body.
+      canvas.drawCircle(
+        center,
+        b.size,
+        Paint()..color = b.color.withValues(alpha: b.opacity * edgeFade),
+      );
+      // Crisp rim so it reads as a bubble rather than a blur.
       canvas.drawCircle(
         center,
         b.size,
         Paint()
-          ..color = b.color.withOpacity(b.opacity * edgeFade)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+          ..color = b.color.withValues(alpha: (b.opacity + 0.25) * edgeFade)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4,
       );
+      // Little highlight, like light catching the top of a bubble.
       canvas.drawCircle(
-        center.translate(-b.size * 0.28, -b.size * 0.28),
-        b.size * 0.28,
-        Paint()..color = Colors.white.withOpacity(0.18 * edgeFade),
+        center.translate(-b.size * 0.3, -b.size * 0.3),
+        b.size * 0.3,
+        Paint()..color = Colors.white.withValues(alpha: 0.35 * edgeFade),
       );
     }
   }
@@ -1120,4 +1371,108 @@ class _FloatingBubblesPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _FloatingBubblesPainter oldDelegate) =>
       oldDelegate.t != t;
+}
+
+/// One piece of confetti in the one-time "welcome" burst.
+class _ConfettiPiece {
+  final double angle; // launch direction, radians
+  final double speed; // how far it travels outward, in logical pixels
+  final double size;
+  final double spin; // full rotations over the burst's lifetime
+  final Color color;
+  final bool isStar;
+
+  const _ConfettiPiece({
+    required this.angle,
+    required this.speed,
+    required this.size,
+    required this.spin,
+    required this.color,
+    required this.isStar,
+  });
+}
+
+List<_ConfettiPiece> _generateConfetti({bool big = false}) {
+  final random = math.Random(3);
+  const palette = [
+    Color(0xFFFFC857),
+    Color(0xFF64FFDA),
+    Color(0xFFFF7AC6),
+    Color(0xFFE53935),
+    Color(0xFF43A047),
+    Color(0xFF1E88E5),
+  ];
+  final count = big ? 32 : 18;
+  final speedBoost = big ? 1.4 : 1.0;
+  return List.generate(count, (i) {
+    final angle = (i / count) * 2 * math.pi + random.nextDouble() * 0.3;
+    return _ConfettiPiece(
+      angle: angle,
+      speed: (70 + random.nextDouble() * 90) * speedBoost,
+      size: 5 + random.nextDouble() * (big ? 6 : 5),
+      spin: 1.5 + random.nextDouble() * 2.5,
+      color: palette[random.nextInt(palette.length)],
+      isStar: random.nextBool(),
+    );
+  });
+}
+
+/// Paints an outward-radiating confetti burst from the icon area, fading
+/// and slowing (gravity-ish) as it goes. Plays once — the controller
+/// driving [t] does not repeat.
+class _ConfettiPainter extends CustomPainter {
+  final double t; // 0..1, plays once
+  final List<_ConfettiPiece> pieces;
+  _ConfettiPainter({required this.t, required this.pieces});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (t <= 0 || t >= 1) return;
+    // Roughly where the pulsing icon sits above the card.
+    final origin = Offset(size.width / 2, size.height * 0.32);
+    // Ease-out travel + a touch of "gravity" pulling pieces down over time.
+    final travel = Curves.easeOut.transform(t);
+    final fade = (1 - t).clamp(0.0, 1.0);
+
+    for (final p in pieces) {
+      final dx = math.cos(p.angle) * p.speed * travel;
+      final dy = math.sin(p.angle) * p.speed * travel + 40 * t * t;
+      final center = origin + Offset(dx, dy);
+      final rotation = p.spin * 2 * math.pi * t;
+
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.rotate(rotation);
+      final paint = Paint()..color = p.color.withValues(alpha: fade);
+      if (p.isStar) {
+        _drawStar(canvas, paint, p.size);
+      } else {
+        canvas.drawRect(
+          Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size * 0.6),
+          paint,
+        );
+      }
+      canvas.restore();
+    }
+  }
+
+  void _drawStar(Canvas canvas, Paint paint, double radius) {
+    const points = 5;
+    final path = Path();
+    for (int i = 0; i < points * 2; i++) {
+      final r = i.isEven ? radius : radius * 0.45;
+      final a = (i * math.pi) / points;
+      final pt = Offset(math.cos(a) * r, math.sin(a) * r);
+      if (i == 0) {
+        path.moveTo(pt.dx, pt.dy);
+      } else {
+        path.lineTo(pt.dx, pt.dy);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => oldDelegate.t != t;
 }

@@ -97,7 +97,7 @@ void main() {
       grid.cells[3][3] = red;
 
       final floating = grid.findFloating();
-      expect(floating, contains([3, 3]));
+      expect(floating, contains(equals([3, 3])));
     });
 
     test('removing the bridge cell orphans the bubbles below it', () {
@@ -111,8 +111,8 @@ void main() {
 
       grid.cells[1][0] = null; // pop the bridge, as a real shot would
       final floating = grid.findFloating();
-      expect(floating, contains([2, 0]));
-      expect(floating, isNot(contains([0, 0])));
+      expect(floating, contains(equals([2, 0])));
+      expect(floating, isNot(contains(equals([0, 0]))));
     });
   });
 
@@ -127,8 +127,8 @@ void main() {
 
       final reds = grid.cellsOfColor(red);
       expect(reds.length, 2);
-      expect(reds, contains([0, 0]));
-      expect(reds, contains([1, 1]));
+      expect(reds, contains(equals([0, 0])));
+      expect(reds, contains(equals([1, 1])));
     });
 
     test('cellsInRow only returns occupied cells in that row', () {

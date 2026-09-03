@@ -10,7 +10,7 @@ import 'package:ricochet_pop/game/bubble_grid.dart';
 import 'package:ricochet_pop/game/trajectory.dart';
 
 void main() {
-  final boardSize = const Size(400, 600);
+  const boardSize = Size(400, 600);
 
   group('computeAimPath', () {
     test('a straight shot up the middle goes directly to the ceiling', () {

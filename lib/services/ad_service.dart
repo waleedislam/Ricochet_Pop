@@ -2,8 +2,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-/// Wraps Google Mobile Ads (AdMob) setup, banner loading, and interstitial
-/// loading/showing behind a tiny API the rest of the app can call.
+/// Wraps Google Mobile Ads (AdMob) setup, banner loading, and rewarded
+/// interstitial loading/showing behind a tiny API the rest of the app can
+/// call.
 ///
 /// IMPORTANT: every ID in this file is one of Google's official public
 /// TEST ad unit IDs. They always fill with a clearly-labeled "Test Ad" and
@@ -33,15 +34,26 @@ class AdService {
     throw UnsupportedError('Unsupported platform for banner ads');
   }
 
-  /// Google test interstitial ad unit.
-  static String get interstitialAdUnitId {
-    if (Platform.isAndroid) return 'ca-app-pub-3940256099942544/1033173712';
-    if (Platform.isIOS) return 'ca-app-pub-3940256099942544/4411468910';
-    throw UnsupportedError('Unsupported platform for interstitial ads');
+  /// Google test rewarded interstitial ad unit. Rewarded interstitials are
+  /// full-screen like a plain interstitial, but reward the player for
+  /// watching — better for player goodwill and typically better eCPM than
+  /// a plain interstitial in the same placement.
+  static String get rewardedInterstitialAdUnitId {
+    if (Platform.isAndroid) return 'ca-app-pub-3940256099942544/5354046379';
+    if (Platform.isIOS) return 'ca-app-pub-3940256099942544/6978759866';
+    throw UnsupportedError('Unsupported platform for rewarded interstitial ads');
   }
 
-  InterstitialAd? _interstitialAd;
-  bool _interstitialLoading = false;
+  RewardedInterstitialAd? _rewardedAd;
+  bool _rewardedLoading = false;
+
+  /// Counts level-ends (win or lose, combined) so the ad prompt only shows
+  /// every [_levelEndsPerAd] times instead of after every single level —
+  /// showing a full-screen ad after every level feels punishing regardless
+  /// of whether the player won or lost, so this is a flat counter rather
+  /// than being tied to win/loss.
+  static const int _levelEndsPerAd = 3;
+  int _levelEndCount = 0;
 
   /// Call once before runApp(). Safe no-op on web/desktop.
   static Future<void> initialize() async {
@@ -68,51 +80,68 @@ class AdService {
     )..load();
   }
 
-  /// Preloads an interstitial so it's ready the moment [showInterstitial]
-  /// is called (e.g. right after a level ends). Safe no-op on web/desktop.
-  void preloadInterstitial() {
+  /// Preloads a rewarded interstitial so it's ready the moment
+  /// [showRewardedInterstitial] is called. Safe no-op on web/desktop.
+  void preloadRewardedInterstitial() {
     if (!_adsSupported) return;
-    if (_interstitialLoading || _interstitialAd != null) return;
-    _interstitialLoading = true;
-    InterstitialAd.load(
-      adUnitId: interstitialAdUnitId,
+    if (_rewardedLoading || _rewardedAd != null) return;
+    _rewardedLoading = true;
+    RewardedInterstitialAd.load(
+      adUnitId: rewardedInterstitialAdUnitId,
       request: const AdRequest(),
-      adLoadCallback: InterstitialAdLoadCallback(
+      rewardedInterstitialAdLoadCallback: RewardedInterstitialAdLoadCallback(
         onAdLoaded: (ad) {
-          _interstitialAd = ad;
-          _interstitialLoading = false;
+          _rewardedAd = ad;
+          _rewardedLoading = false;
           ad.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (ad) {
               ad.dispose();
-              _interstitialAd = null;
-              preloadInterstitial(); // get the next one ready
+              _rewardedAd = null;
+              preloadRewardedInterstitial(); // get the next one ready
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
               ad.dispose();
-              _interstitialAd = null;
-              preloadInterstitial();
+              _rewardedAd = null;
+              preloadRewardedInterstitial();
             },
           );
         },
         onAdFailedToLoad: (error) {
-          _interstitialLoading = false;
-          _interstitialAd = null;
+          _rewardedLoading = false;
+          _rewardedAd = null;
         },
       ),
     );
   }
 
-  /// Shows the preloaded interstitial if one is ready; otherwise does
-  /// nothing (never blocks gameplay waiting on a network call, and is a
-  /// safe no-op on web/desktop).
-  void showInterstitial() {
+  /// Call this once per level end (win or lose). Returns true every
+  /// [_levelEndsPerAd]th time — the caller should then show an intro
+  /// prompt (reward + skip option, per Google's rewarded-interstitial
+  /// guidance) before actually calling [showRewardedInterstitial].
+  bool shouldOfferLevelEndAd() {
+    _levelEndCount++;
+    return _levelEndCount % _levelEndsPerAd == 0;
+  }
+
+  /// True if a rewarded interstitial is loaded and ready to show right
+  /// now. Lets the caller decide not to bother offering it if not.
+  bool get isRewardedInterstitialReady => _rewardedAd != null;
+
+  /// Shows the preloaded rewarded interstitial if one is ready, calling
+  /// [onReward] with the reward amount once the player actually earns it
+  /// (i.e. watches enough of the ad — not just for opening it). Does
+  /// nothing if no ad is ready (never blocks gameplay waiting on a
+  /// network call), and is a safe no-op on web/desktop.
+  void showRewardedInterstitial({required void Function(int amount) onReward}) {
     if (!_adsSupported) return;
-    final ad = _interstitialAd;
+    final ad = _rewardedAd;
     if (ad == null) {
-      preloadInterstitial();
+      preloadRewardedInterstitial();
       return;
     }
-    _interstitialAd = null;
-    ad.show();
+    _rewardedAd = null;
+    ad.show(
+      onUserEarnedReward: (ad, reward) => onReward(reward.amount.toInt()),
+    );
   }
 }
