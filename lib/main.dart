@@ -36,7 +36,7 @@ class BouncingBallApp extends StatelessWidget {
     );
 
     return MaterialApp(
-      title: 'Ricochet Pop',
+      title: 'BUBBLE TROUBLE',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
