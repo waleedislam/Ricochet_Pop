@@ -295,7 +295,7 @@ class _MenuOverlayState extends State<MenuOverlay>
       case OverlayMode.levelFailed:
         return widget.failReason ?? 'Level Failed';
       case OverlayMode.start:
-        return 'Ricochet Pop';
+        return 'BUBBLE TROUBLE';
     }
   }
 
