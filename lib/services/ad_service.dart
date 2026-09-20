@@ -1,24 +1,27 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 /// Wraps Google Mobile Ads (AdMob) setup, banner loading, and rewarded
 /// interstitial loading/showing behind a tiny API the rest of the app can
 /// call.
 ///
-/// IMPORTANT: every ID in this file is one of Google's official public
-/// TEST ad unit IDs. They always fill with a clearly-labeled "Test Ad" and
-/// generate no real revenue — safe to ship while developing. Before a real
-/// Play Store / App Store release, replace these with the ad unit IDs from
-/// your own AdMob account (and the app IDs in AndroidManifest.xml /
-/// Info.plist), or you risk your AdMob account being suspended for invalid
-/// traffic.
+/// IMPORTANT: this file now uses REAL Ricochet Pop AdMob ad unit IDs for
+/// Android release builds. In debug mode (or on any platform without a
+/// real ID configured yet, like iOS below) it still falls back to Google's
+/// official public TEST ad unit IDs, so you never accidentally serve/click
+/// real ads while developing — doing that risks your AdMob account being
+/// suspended for invalid traffic.
+///
+/// TODO: replace the iOS test IDs below with real ones once you create an
+/// iOS app + ad units in AdMob. Until then, iOS always uses test ads,
+/// even in release builds.
 ///
 /// NOTE: google_mobile_ads only supports Android and iOS — there is no web
 /// (or desktop) implementation. Every method below checks [kIsWeb] first and
 /// safely no-ops there, so `flutter run -d chrome` still works; ads simply
 /// don't appear when testing on web. Run on an Android emulator/device or
-/// iOS simulator/device to actually see the test ads.
+/// iOS simulator/device to actually see ads.
 class AdService {
   AdService._();
   static final AdService instance = AdService._();
@@ -27,20 +30,31 @@ class AdService {
   static bool get _adsSupported =>
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
-  /// Google test banner ad unit.
+  /// Banner ad unit. Real ID on Android release builds; Google test ID
+  /// everywhere else (debug builds, and iOS until real IDs are added).
   static String get bannerAdUnitId {
-    if (Platform.isAndroid) return 'ca-app-pub-3940256099942544/6300978111';
-    if (Platform.isIOS) return 'ca-app-pub-3940256099942544/2934735716';
+    if (Platform.isAndroid) {
+      return kReleaseMode
+          ? 'ca-app-pub-1351507863490073/7752954748' // real - Ricochet Pop
+          : 'ca-app-pub-3940256099942544/6300978111'; // Google test
+    }
+    if (Platform.isIOS) return 'ca-app-pub-3940256099942544/2934735716'; // Google test
     throw UnsupportedError('Unsupported platform for banner ads');
   }
 
-  /// Google test rewarded interstitial ad unit. Rewarded interstitials are
-  /// full-screen like a plain interstitial, but reward the player for
-  /// watching — better for player goodwill and typically better eCPM than
-  /// a plain interstitial in the same placement.
+  /// Rewarded interstitial ad unit. Real ID on Android release builds;
+  /// Google test ID everywhere else (debug builds, and iOS until real IDs
+  /// are added). Rewarded interstitials are full-screen like a plain
+  /// interstitial, but reward the player for watching — better for player
+  /// goodwill and typically better eCPM than a plain interstitial in the
+  /// same placement.
   static String get rewardedInterstitialAdUnitId {
-    if (Platform.isAndroid) return 'ca-app-pub-3940256099942544/5354046379';
-    if (Platform.isIOS) return 'ca-app-pub-3940256099942544/6978759866';
+    if (Platform.isAndroid) {
+      return kReleaseMode
+          ? 'ca-app-pub-1351507863490073/6470083658' // real - Ricochet Pop
+          : 'ca-app-pub-3940256099942544/5354046379'; // Google test
+    }
+    if (Platform.isIOS) return 'ca-app-pub-3940256099942544/6978759866'; // Google test
     throw UnsupportedError('Unsupported platform for rewarded interstitial ads');
   }
 
