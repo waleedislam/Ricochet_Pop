@@ -61,6 +61,20 @@ flutter run -d chrome     # Web
 flutter run                # Connected device/emulator
 ```
 
+## Android App Bundle (.aab)
+
+A signed release Android App Bundle is available at:
+
+```
+build/app/outputs/bundle/release/app-release.aab
+```
+
+Rebuild it with:
+
+```bash
+flutter build appbundle --release
+```
+
 ## Roadmap
 
 - [ ] Fixed level layouts with a level-select screen
